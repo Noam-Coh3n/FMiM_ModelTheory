@@ -28,14 +28,15 @@ noncomputable def ofₑ (i : ι) : G i ↪ₑ[L] L.DirectLimit G (system f) wher
       erw [(F i).map_rel]
     | imp _ _ => unfold F at *; simp_all only [BoundedFormula.realize_imp]
     | all φ ih =>
-      refine ⟨fun h => ?_, fun h => ?_⟩ <;> simp only [BoundedFormula.realize_all] <;> intro a
+      refine ⟨fun h => ?_, fun _ => ?_⟩ <;> simp only [BoundedFormula.realize_all] <;> intro a
       · simp only [← ih, Fin.comp_snoc]
         apply h
       · refine DirectLimit.inductionOn a fun j a' => ?_
         let ⟨k, ik, jk⟩ := exists_ge_ge i j
         let comm {ℓ} (ℓk) : F ℓ = F k ∘ f ℓ k ℓk :=
           funext fun _ => DirectLimit.of_f.symm
-        let eq_def := Unique.eq_default (f i k ik ∘ default : Empty → _)
-        rw [comm ik, comm jk, Function.comp_assoc, eq_def]
+        let eq_dft := Unique.eq_default (f i k ik ∘ default : Empty → _)
+        rw [comm ik, comm jk, Function.comp_assoc, eq_dft]
         simp only [Function.comp_assoc, Function.comp_apply, ← Fin.comp_snoc, ih]
-        exact eq_def ▸ BoundedFormula.realize_all.1 (((f i k ik).map_boundedFormula (∀'φ) ..).2 h) _
+        apply eq_dft ▸ ((f i k ik).map_boundedFormula (∀'φ) ..).2
+        assumption
