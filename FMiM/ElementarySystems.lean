@@ -1,5 +1,6 @@
 import Mathlib.ModelTheory.DirectLimit
 import Mathlib.ModelTheory.ElementaryMaps
+import Mathlib.Order.Ideal
 
 open FirstOrder Language DirectLimit
 
@@ -40,3 +41,26 @@ noncomputable def ofₑ (i : ι) : G i ↪ₑ[L] L.DirectLimit G (system f) wher
         simp only [Function.comp_assoc, Function.comp_apply, ← Fin.comp_snoc, ih]
         apply eq_dft ▸ ((f i k ik).map_boundedFormula (∀'φ) ..).2
         assumption
+
+open Order
+
+variable {J : Cofinal ι}
+
+instance : SetLike (Cofinal ι) ι := ⟨Cofinal.carrier, fun ⟨_, _⟩ ⟨_, _⟩ _ => by simp_all only⟩
+
+instance : IsDirectedOrder J := by
+  constructor
+  intro i j
+  let ⟨k, ik, jk⟩ := exists_ge_ge (α := ι) i j
+  let ⟨ℓ, ℓ_mem, kℓ⟩ := J.isCofinal k
+  exact ⟨⟨ℓ, ℓ_mem⟩, ⟨ik.trans kℓ, jk.trans kℓ⟩⟩
+
+open Classical in
+instance : Nonempty J := ⟨J.above ofNonempty, J.above_mem _⟩
+
+instance : ∀ (i : J), L.Structure (Set.restrict J G i) :=
+  inferInstanceAs <| ∀ (i : J), L.Structure (G i)
+
+instance [DirectedSystem G (f · · ·)] : DirectedSystem (Set.restrict J G) (f · · ·) where
+  map_self _ _        := DirectedSystem.map_self' f _
+  map_map _ _ _ _ _ _ := DirectedSystem.map_map'  f _ _ _
