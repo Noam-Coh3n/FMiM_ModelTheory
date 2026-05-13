@@ -1,7 +1,6 @@
 import Mathlib.CategoryTheory.ConcreteCategory.Basic
-import Mathlib.CategoryTheory.Limits.IsLimit
-import Mathlib.ModelTheory.DirectLimit
 import Mathlib.CategoryTheory.Filtered.Basic
+import Mathlib.ModelTheory.DirectLimit
 
 open FirstOrder CategoryTheory Language
 
@@ -16,7 +15,7 @@ attribute [instance] Struc.str
 
 initialize_simps_projections Struc (carrier → coe, -str)
 
-def mkStruc := Struc.mk (L := L)
+def FirstOrder.Language.mkStruc := Struc.mk (L := L)
 
 instance : CoeSort L.Struc (Type _) :=
   ⟨Struc.carrier⟩
@@ -59,3 +58,9 @@ noncomputable def DirectLimit.isColimit : Limits.IsColimit (DirectLimit' G f) wh
     ext1
     apply h
 where comm c := fun _ _ ij => Embedding.ext_iff.1 (c.ι.naturality (homOfLE ij))
+
+variable (F : J ⥤ L.Struc)
+
+instance : DirectedSystem (fun i => F.obj i) (fun _ _ ij => F.map ij.hom) where
+  map_self := by simp
+  map_map k j i ij jk := Embedding.ext_iff.mp (F.4 ij.hom jk.hom).symm
