@@ -12,7 +12,6 @@ variable {L : Language}
 
 -- The category of first order structures with embeddings
 structure Struc where
-  of ::
   carrier : Type
   [str : L.Structure carrier]
 
@@ -20,7 +19,9 @@ attribute [instance] Struc.str
 
 initialize_simps_projections Struc (carrier → coe, -str)
 
-instance {L : Language} : CoeSort L.Struc (Type _) :=
+def mkStruc := Struc.mk (L := L)
+
+instance : CoeSort L.Struc (Type _) :=
   ⟨Struc.carrier⟩
 
 attribute [coe] Struc.carrier
@@ -34,18 +35,18 @@ instance : ConcreteCategory L.Struc (L.Embedding · ·) where
   hom := id
   ofHom := id
 
-variable {L : Language} {J : Type} [Preorder J] [IsDirectedOrder J] [Nonempty J]
+variable {J : Type} [Preorder J] [IsDirectedOrder J] [Nonempty J]
 variable (G : J → Type) [∀ i, L.Structure (G i)] (f : ∀ ⦃i j⦄, i ≤ j → G i ↪[L] G j)
 variable [DirectedSystem G fun _ _ => (f ·)]
 
 def as_functor : J ⥤ L.Struc where
-  obj i        := .of <| G i
+  obj i        := .mk <| G i
   map ij       := f <| ij.le
   map_id _     := Embedding.ext fun _ => DirectedSystem.map_self _ _
   map_comp _ _ := Embedding.ext fun _ => (DirectedSystem.map_map _ _ _ _).symm
 
 noncomputable def DirectLimit' : Limits.Cocone (as_functor G f) where
-  pt := .of <| DirectLimit G f
+  pt := .mk <| DirectLimit G f
   ι := ⟨DirectLimit.of L J G f, fun _ _ _ => Embedding.ext fun _ => DirectLimit.of_f⟩
 
 noncomputable def DirectLimit.isColimit : Limits.IsColimit (DirectLimit' G f) where
