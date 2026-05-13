@@ -35,27 +35,26 @@ instance : ConcreteCategory L.Struc (L.Embedding · ·) where
   ofHom := id
 
 variable {L : Language} {J : Type} [Preorder J] [IsDirectedOrder J] [Nonempty J]
-variable {G : J → Type} [∀ i, L.Structure (G i)] (f : ∀ ⦃i j⦄, i ≤ j → G i ↪[L] G j)
+variable (G : J → Type) [∀ i, L.Structure (G i)] (f : ∀ ⦃i j⦄, i ≤ j → G i ↪[L] G j)
 variable [DirectedSystem G fun _ _ => (f ·)]
 
-def G' : J ⥤ L.Struc where
+def as_functor : J ⥤ L.Struc where
   obj i        := .of <| G i
   map ij       := f <| ij.le
   map_id _     := Embedding.ext fun _ => DirectedSystem.map_self _ _
   map_comp _ _ := Embedding.ext fun _ => (DirectedSystem.map_map _ _ _ _).symm
 
-noncomputable def DirectLimit' : Limits.Cocone (G' f) where
+noncomputable def DirectLimit' : Limits.Cocone (as_functor G f) where
   pt := .of <| DirectLimit G f
   ι := ⟨DirectLimit.of L J G f, fun _ _ _ => Embedding.ext fun _ => DirectLimit.of_f⟩
 
-noncomputable def DirectLimit.isColimit : Limits.IsColimit (DirectLimit' f) where
+noncomputable def DirectLimit.isColimit : Limits.IsColimit (DirectLimit' G f) where
   desc c := lift _ _ _ _ c.ι.app (comm c)
   uniq t m h := by
-    apply Eq.trans <| Embedding.ext fun x => lift_unique m x
+    apply Eq.trans <| Embedding.ext <| lift_unique m
     congr
-    ext1 i
-    exact h i
-
+    ext1
+    apply h
 where comm c := fun _ _ ij => Embedding.ext_iff.mp (c.ι.naturality (homOfLE ij))
 
 end FirstOrder.Language
