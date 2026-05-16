@@ -10,28 +10,32 @@ variable {L E E₁ E₂ : Language}
 
 section FreshConstants
 
-variable {α : Type} [DecidableEq α]
+variable {α : Type} [DecidableEq α] (φ : L[[α]].Sentence)
 
-noncomputable def exs_consts (φ : L[[α]].Sentence) : L.Sentence :=
+noncomputable def exs_consts : L.Sentence :=
   FirstOrder.Language.Formula.iExs φ.constantsVarsEquiv.freeVarFinset <|
     φ.constantsVarsEquiv.restrictFreeVar .inr
 
-variable {φ : L[[α]].Sentence} {M : Type} [L.Structure M] [Nonempty M]
+variable {φ} {M : Type} [L.Structure M] [Nonempty M]
 
-variable (M)
-
-noncomputable def expand_of_sat_exs [h : M ⊨ {exs_consts φ}] : Theory.ModelType {φ} := by
-  letI : (constantsOn α).Structure M :=
-    constantsOn.structure fun a =>
+@[reducible]
+noncomputable def expand_of_sat_exs_const [h : M ⊨ {exs_consts φ}] : (constantsOn α).Structure M :=
+  constantsOn.structure fun a =>
     if mem : _ then
       (Formula.realize_iExs.mp <| Theory.model_singleton_iff.1 h).choose ⟨.inl a, mem⟩
     else
       Classical.ofNonempty
-  refine Theory.ModelType.mk (is_model := ?_) M
-  · refine Theory.model_singleton_iff.2 <| BoundedFormula.realize_constantsVarsEquiv.1 ?_
+
+variable (M)
+
+noncomputable def expand_of_sat_exs [h : M ⊨ {exs_consts φ}] : Theory.ModelType {φ} :=
+  letI : (constantsOn α).Structure M := expand_of_sat_exs_const
+  letI : M ⊨ {φ} := by
+    refine Theory.model_singleton_iff.2 <| BoundedFormula.realize_constantsVarsEquiv.1 ?_
     apply (BoundedFormula.realize_restrictFreeVar _ _).1
     · exact (Formula.realize_iExs.mp (Theory.model_singleton_iff.1 h)).choose_spec
     · exact fun ⟨.inl a, mem⟩ => Eq.symm <| dite_cond_eq_true (eq_true mem)
+  ⟨M⟩
 
 end FreshConstants
 
@@ -46,14 +50,23 @@ theorem isSatisfiable_union_of_finite_unions {S T : L.Theory}
 
 def Theory.ModelType.toStruc {T : L.Theory} (M : T.ModelType) : L.Struc := .mk M
 
-variable {A B : Type} [L.Structure A] [L.Structure B] [(L.sum E).Structure B]
-variable [(.sumInl : _ →ᴸ L.sum E).IsExpansionOn B]
+variable {A B : Type} [L.Structure A] [L.Structure B] [E.Structure B]
 
 private abbrev ℒ₁ : L[[A]] →ᴸ (L.sum E)[[A]][[B]] :=
   .comp .sumInl <| .addConstants _ .sumInl
 
+
+-- Could generalize to comp, sumInl, etc.
+private instance [(constantsOn A).Structure B] : (@ℒ₁ L E A B).IsExpansionOn B where
+  map_onFunction f xs := by cases f <;> rfl
+  map_onRelation r xs := by cases r <;> rfl
+
 private abbrev ℒ₂ : (L.sum E)[[B]] →ᴸ (L.sum E)[[A]][[B]] :=
   .addConstants _ .sumInl
+
+private instance [(constantsOn A).Structure B] : (@ℒ₂ L E A B).IsExpansionOn B where
+  map_onFunction f xs := by cases f <;> rfl
+  map_onRelation r xs := by cases r <;> rfl
 
 namespace FirstOrder.Language.LHom
 
@@ -74,6 +87,7 @@ theorem addConstants_injective (hf : f.Injective) : (LHom.addConstants α f).Inj
 
 end FirstOrder.Language.LHom
 
+omit [L.Structure A] [L.Structure B] [E.Structure B] in
 lemma Iℒ₁ : (@ℒ₁ L E A B).Injective := by
   apply LHom.comp_injective
   · exact LHom.sumInl_injective
@@ -122,43 +136,47 @@ variable (U : Finset L.Sentence)
 @[simp]
 noncomputable def Finset.toSentence : L.Sentence := (Formula.iInf fun (φ : U) => φ.val)
 
-theorem pop : B ⊨ (U : L.Theory) ↔ B ⊨ U.toSentence := by simp [Sentence.Realize]
+theorem Theory.model_iff_model_toSentence : B ⊨ (U : L.Theory) ↔ B ⊨ U.toSentence :=
+  by simp [Sentence.Realize]
 
 
-variable [Nonempty A] [Nonempty B] [DecidableEq B]
+variable [Nonempty A] [Nonempty B] [DecidableEq A]
 
--- instance {M} {T T' : L.Theory} [L.Structure M] (h : M ⊨ T) (h' : M ⊨ T') : M ⊨ T ∪ T' :=
---   Theory.Model.union h h'
-
-open Classical in
-noncomputable def amalg₁ (h : L.ElementarilyEquivalent A B) : (T : (L.sum E)[[A]][[B]].Theory).ModelType := by
+noncomputable def amalg₁ (h : L.ElementarilyEquivalent A B)
+    : (T : (L.sum E)[[A]][[B]].Theory).ModelType := by
   refine Classical.choice <| isSatisfiable_union_of_finite_unions fun S0 T0 hS hT =>
-    let φ := (
-      S0.finite_toSet.preimage (Set.injOn_of_injective <| onSentence_injective Iℒ₁)
-    ).toFinset.toSentence
-    letI : (L.sum E)[[A]][[B]].Structure B := sorry
+    let U := (S0.finite_toSet.preimage (Set.injOn_of_injective <| onSentence_injective Iℒ₁))
+    let φ := U.toFinset.toSentence
+    letI : A ⊨ {exs_consts φ} := by
+      apply Theory.model_singleton_iff.2
+      apply Formula.realize_iExs.2
+      exists fun ⟨.inl a, _⟩ => a
+      suffices A ⊨ φ from
+       ((BoundedFormula.realize_restrictFreeVar _ fun ⟨Sum.inl _,_⟩ => rfl).trans
+          BoundedFormula.realize_constantsVarsEquiv).2 this
+      suffices _ ⊆ L.elementaryDiagram A by
+        refine (Theory.model_iff_model_toSentence _).1 ?_
+        rw [U.coe_toFinset]
+        exact Theory.model_iff_subset_completeTheory.2 this
+      rw [← Set.preimage_image_eq (L.elementaryDiagram A) <| onSentence_injective Iℒ₁]
+      exact Set.preimage_mono hS
+    letI : B ⊨ {exs_consts φ} := h.theory_model
+    letI : (constantsOn A).Structure B := expand_of_sat_exs_const (φ := φ)
     ⟨@Theory.ModelType.mk _ _ B _ ?_ _⟩
-  -- · sorry
-    -- exact @FirstOrder.Language.withConstantsSelfStructure _ _ (expand_of_sat_exs (φ := S0.toSentence) B).struc
   · apply Theory.Model.union
-    · sorry
-    · sorry
--- def amalg₁ {A B} [Nonempty A] [Nonempty B] [L.Structure A] [L.Structure B] [E.Structure B]
---     (h : L.ElementarilyEquivalent A B) : (L.sum E).Struc :=
---   let L' := (L.sum E)[[A]][[B]]
---   let ℒ₁ : L[[A]]         →ᴸ L' := .comp .sumInl <| .addConstants _ .sumInl
---   let ℒ₂ : (L.sum E)[[B]] →ᴸ L' := .addConstants _ .sumInl
---   let T : L'.Theory := ℒ₁.onTheory (L.elementaryDiagram A) ∪ ℒ₂.onTheory ((L.sum E).elementaryDiagram B)
-  -- @Struc.mk _ (Theory.ModelType.Carrier <| Classical.choice (isSatisfiable_union_of_finite_unions ?_ : T.IsSatisfiable)) <| Theory.ModelType.struc (L := L.sum E) (Classical.choice _)
-
-    -- Theory.ModelType.Carrier <| Classical.choice <| T.isSatisfiable_iff_isFinitelySatisfiable.mpr
-  --   fun T0 sub => by
-  -- have : L'.Structure B := sorry
-  -- refine ⟨@Theory.ModelType.mk _ _ B _ ?_ _⟩
-  -- · rw [← (Set.inter_union_distrib_left _ _ _).symm.trans (Set.inter_eq_self_of_subset_left sub)]
-  --   apply FirstOrder.Language.Theory.Model.union
-  --   · exact ⟨fun _ => sorry⟩
-  --   · sorry
+    · rw [← Set.SurjOn.image_preimage (Set.surjOn_image ..) hS]
+      apply (ℒ₁.onTheory_model _).2
+      rw [← (S0.finite_toSet.preimage
+          (Set.injOn_of_injective <| onSentence_injective Iℒ₁)).coe_toFinset]
+      apply (Theory.model_iff_model_toSentence _).2
+      apply Theory.model_singleton_iff.1
+      exact (expand_of_sat_exs _).is_model
+    · rw [← Set.SurjOn.image_preimage (Set.surjOn_image ..) hT]
+      apply (ℒ₂.onTheory_model _).2
+      suffices _ ⊆ (L.sum E).elementaryDiagram B from Theory.model_iff_subset_completeTheory.2 this
+      rw [← Set.preimage_image_eq ((L.sum E).elementaryDiagram B)]
+      · exact Set.preimage_mono hT
+      · exact onSentence_injective Iℒ₂
 
 variable {T : L.Theory} {T₁ : (L.sum E₁).Theory} {T₂ : (L.sum E₂).Theory}
 variable {T_sub₁ : LHom.sumInl.onTheory T ⊆ T₁} {T_sub₂ : LHom.sumInl.onTheory T ⊆ T₂}
