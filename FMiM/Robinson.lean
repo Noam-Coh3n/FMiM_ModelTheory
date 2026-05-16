@@ -6,7 +6,7 @@ set_option linter.unusedSectionVars false
 
 open FirstOrder Language CategoryTheory
 
-variable {L E E₁ E₂ : Language}
+variable {L : Language}
 
 section FreshConstants
 
@@ -50,21 +50,22 @@ theorem isSatisfiable_union_of_finite_unions {S T : L.Theory}
 
 def Theory.ModelType.toStruc {T : L.Theory} (M : T.ModelType) : L.Struc := .mk M
 
-variable {A B : Type} [L.Structure A] [L.Structure B] [E.Structure B]
+variable {E : Language} {A B : Type}
 
 private abbrev ℒ₁ : L[[A]] →ᴸ (L.sum E)[[A]][[B]] :=
   .comp .sumInl <| .addConstants _ .sumInl
 
-
 -- Could generalize to comp, sumInl, etc.
-private instance [(constantsOn A).Structure B] : (@ℒ₁ L E A B).IsExpansionOn B where
+private instance [L.Structure B] [E.Structure B] [(constantsOn A).Structure B]
+    : (@ℒ₁ L E A B).IsExpansionOn B where
   map_onFunction f xs := by cases f <;> rfl
   map_onRelation r xs := by cases r <;> rfl
 
 private abbrev ℒ₂ : (L.sum E)[[B]] →ᴸ (L.sum E)[[A]][[B]] :=
   .addConstants _ .sumInl
 
-private instance [(constantsOn A).Structure B] : (@ℒ₂ L E A B).IsExpansionOn B where
+private instance [L.Structure B] [E.Structure B] [(constantsOn A).Structure B]
+    : (@ℒ₂ L E A B).IsExpansionOn B where
   map_onFunction f xs := by cases f <;> rfl
   map_onRelation r xs := by cases r <;> rfl
 
@@ -87,7 +88,6 @@ theorem addConstants_injective (hf : f.Injective) : (LHom.addConstants α f).Inj
 
 end FirstOrder.Language.LHom
 
-omit [L.Structure A] [L.Structure B] [E.Structure B] in
 lemma Iℒ₁ : (@ℒ₁ L E A B).Injective := by
   apply LHom.comp_injective
   · exact LHom.sumInl_injective
@@ -97,7 +97,7 @@ lemma Iℒ₁ : (@ℒ₁ L E A B).Injective := by
 lemma Iℒ₂ : (@ℒ₂ L E A B).Injective :=
   LHom.addConstants_injective LHom.sumInl_injective
 
-variable {ϕ : L →ᴸ L'}
+variable {L'} {ϕ : L →ᴸ L'}
 
 theorem onTerm_injective (hf : ϕ.Injective) : ∀ ⦃t s : L.Term α⦄, ϕ.onTerm t = ϕ.onTerm s → t = s
   | var _, var _, h => congrArg _ <| Term.var.inj h
@@ -128,22 +128,25 @@ theorem onBoundedFormula_injective (hf : ϕ.Injective) : ∀ ⦃φ ψ : L.Bounde
 
 theorem onSentence_injective : ϕ.Injective → ϕ.onSentence.Injective := onBoundedFormula_injective
 
-private abbrev T : (L.sum E)[[A]][[B]].Theory  :=
-  ℒ₁.onTheory (L.elementaryDiagram A) ∪ ℒ₂.onTheory ((L.sum E).elementaryDiagram B)
-
 variable (U : Finset L.Sentence)
 
 @[simp]
 noncomputable def Finset.toSentence : L.Sentence := (Formula.iInf fun (φ : U) => φ.val)
 
-theorem Theory.model_iff_model_toSentence : B ⊨ (U : L.Theory) ↔ B ⊨ U.toSentence :=
+theorem Theory.model_iff_model_toSentence [L.Structure B] : B ⊨ (U : L.Theory) ↔ B ⊨ U.toSentence :=
   by simp [Sentence.Realize]
 
+section Amalg₁
 
-variable [Nonempty A] [Nonempty B] [DecidableEq A]
+variable [DecidableEq A] [Nonempty B]
+variable [L.Structure A] [L.Structure B] [E.Structure B] (h : A ≅[L] B)
 
-noncomputable def amalg₁ (h : L.ElementarilyEquivalent A B)
-    : (T : (L.sum E)[[A]][[B]].Theory).ModelType := by
+private abbrev joint_diagₑ : (L.sum E)[[A]][[B]].Theory  :=
+  ℒ₁.onTheory (L.elementaryDiagram A) ∪ ℒ₂.onTheory ((L.sum E).elementaryDiagram B)
+
+variable (E)
+
+noncomputable def amalg₁ : (@joint_diagₑ L E A B).ModelType := by
   refine Classical.choice <| isSatisfiable_union_of_finite_unions fun S0 T0 hS hT =>
     let U := (S0.finite_toSet.preimage (Set.injOn_of_injective <| onSentence_injective Iℒ₁))
     let φ := U.toFinset.toSentence
@@ -177,6 +180,37 @@ noncomputable def amalg₁ (h : L.ElementarilyEquivalent A B)
       rw [← Set.preimage_image_eq ((L.sum E).elementaryDiagram B)]
       · exact Set.preimage_mono hT
       · exact onSentence_injective Iℒ₂
+
+private noncomputable def amalg₁_mapl :=
+  letI exp := LHom.isExpansionOn_reduct ..
+  @ElementaryEmbedding.ofModelsElementaryDiagram L A
+    _ (((amalg₁ E h).subtheoryModel Set.subset_union_left).reduct ℒ₁) _ _ exp _
+
+private noncomputable def amalg₁_mapr :=
+  letI exp := LHom.isExpansionOn_reduct ..
+  @ElementaryEmbedding.ofModelsElementaryDiagram (L.sum E) B
+    _ (((amalg₁ E h).subtheoryModel Set.subset_union_right).reduct ℒ₂) _ _ exp _
+
+end Amalg₁
+
+section Amalg₂
+
+variable {C : Type} [DecidableEq B] [Nonempty C]
+variable [L.Structure A] [L.Structure B] [L.Structure C] [E.Structure C]
+variable (f : A ↪ₑ[L] B) (g : A ↪ₑ[L] C)
+
+def structure_of_embedding : (constantsOn A).Structure B where
+  funMap := fun {n} c _ => match n with | 0 => f c
+
+
+noncomputable def amalg₂ :=
+  letI := structure_of_embedding f
+  letI := structure_of_embedding g
+  by
+    refine @amalg₁ L[[A]] E B C _ _ _ _ _ ?_
+    sorry -- B ≅[L[[A]]] A ≅[[L[[A]]]] C through f and g
+
+end Amalg₂
 
 variable {T : L.Theory} {T₁ : (L.sum E₁).Theory} {T₂ : (L.sum E₂).Theory}
 variable {T_sub₁ : LHom.sumInl.onTheory T ⊆ T₁} {T_sub₂ : LHom.sumInl.onTheory T ⊆ T₂}
