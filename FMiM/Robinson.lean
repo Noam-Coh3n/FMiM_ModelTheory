@@ -18,7 +18,7 @@ noncomputable def exs_consts : L.Sentence :=
 
 variable {φ} {M : Type} [L.Structure M] [Nonempty M]
 
-@[reducible]
+@[implicit_reducible]
 noncomputable def expand_of_sat_exs_const [h : M ⊨ {exs_consts φ}] : (constantsOn α).Structure M :=
   constantsOn.structure fun a =>
     if mem : _ then
@@ -197,22 +197,34 @@ section Amalg₂
 
 variable {C : Type} [DecidableEq B] [Nonempty C]
 variable [L.Structure A] [L.Structure B] [L.Structure C] [E.Structure C]
-variable (f : A ↪ₑ[L] B) (g : A ↪ₑ[L] C)
+variable (f : A ↪ₑ[L] B) (g : A ↪ₑ[L] C) (E)
 
+@[implicit_reducible]
 def structure_of_embedding : (constantsOn A).Structure B where
   funMap := fun {n} c _ => match n with | 0 => f c
 
-
 noncomputable def amalg₂ :=
-  letI := structure_of_embedding f
-  letI := structure_of_embedding g
-  by
-    refine @amalg₁ L[[A]] E B C _ _ _ _ _ ?_
-    sorry -- B ≅[L[[A]]] A ≅[[L[[A]]]] C through f and g
+  letI : L[[↑Set.univ]].Structure B := L.instStructureWithConstantsElemWithConstants _ f.toEmbedding
+  letI : L[[↑Set.univ]].Structure C := L.instStructureWithConstantsElemWithConstants _ g.toEmbedding
+  amalg₁ E <| ((f.liftWithConstants .univ).elementarilyEquivalent (N := B)).symm.trans <|
+    (g.liftWithConstants .univ).elementarilyEquivalent (N := C)
+
+#check
+  letI : L[[↑Set.univ]].Structure B := L.instStructureWithConstantsElemWithConstants _ f.toEmbedding
+  letI : L[[↑Set.univ]].Structure C := L.instStructureWithConstantsElemWithConstants _ g.toEmbedding
+  @amalg₁_mapl L[[Set.univ (α := A)]] E B C _ _
+  (L.instStructureWithConstantsElemWithConstants _ f.toEmbedding)
+  (L.instStructureWithConstantsElemWithConstants _ g.toEmbedding) _
+  (((f.liftWithConstants .univ).elementarilyEquivalent (N := B)).symm.trans <|
+    (g.liftWithConstants .univ).elementarilyEquivalent (N := C))
+
+theorem elementaryDiagram_mono {M} [L.Structure M] [L'.Structure M] [exp : ϕ.IsExpansionOn M]
+    : (ϕ.addConstants M).onTheory (L.elementaryDiagram M) ⊆ L'.elementaryDiagram M :=
+  fun _ ⟨_, Mψ, φψ⟩ => φψ ▸ (LHom.realize_onSentence M (LHom.addConstants M ϕ) _).2 Mψ
 
 end Amalg₂
 
-variable {T : L.Theory} {T₁ : (L.sum E₁).Theory} {T₂ : (L.sum E₂).Theory}
+variable {E₁ E₂ : Language} {T : L.Theory} {T₁ : (L.sum E₁).Theory} {T₂ : (L.sum E₂).Theory}
 variable {T_sub₁ : LHom.sumInl.onTheory T ⊆ T₁} {T_sub₂ : LHom.sumInl.onTheory T ⊆ T₂}
 variable {T_complete : T.IsComplete}
 
