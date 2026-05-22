@@ -11,7 +11,7 @@ structure FirstOrder.Language.Struc where
   carrier : Type
   [str : L.Structure carrier]
 
-attribute [instance] Struc.str
+attribute [instance high] Struc.str
 
 initialize_simps_projections Struc (carrier → coe, -str)
 
@@ -21,6 +21,12 @@ instance : CoeSort L.Struc (Type _) :=
   ⟨Struc.carrier⟩
 
 attribute [coe] Struc.carrier
+
+-- variable {E : Language} {M : (L.sum E).Struc}
+
+-- instance : L.Structure M := LHom.sumInl.reduct (L' := L.sum E) M
+
+-- instance : E.Structure M := LHom.sumInr.reduct (L' := L.sum E) M
 
 instance : Category L.Struc where
   Hom M N := M ↪[L] N
