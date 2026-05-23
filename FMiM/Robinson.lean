@@ -7,7 +7,7 @@ set_option linter.style.longLine false
 
 open FirstOrder Language CategoryTheory
 
-variable {L : Language}
+variable {L : Language.{0, 0}}
 
 section FreshConstants
 
@@ -51,7 +51,7 @@ theorem isSatisfiable_union_of_finite_unions {S T : L.Theory}
 
 def Theory.ModelType.toStruc {T : L.Theory} (M : T.ModelType) : L.Struc := .mk M
 
-variable {L' : Language} (ϕ : L →ᴸ L') {A B : Type}
+variable {L' : Language.{0, 0}} (ϕ : L →ᴸ L') {A B : Type}
 
 abbrev ℒ₁ : L[[A]] →ᴸ L'[[A]][[B]] :=
   .comp (L'[[A]].lhomWithConstants B) <| ϕ.addConstants _
@@ -62,11 +62,6 @@ instance {F : L →ᴸ L'} {G : L' →ᴸ L''}
     : (G.comp F).IsExpansionOn α where
   map_onFunction _ _ := (G.map_onFunction ..).trans <| F.map_onFunction ..
   map_onRelation _ _ := (G.map_onRelation ..).trans <| F.map_onRelation ..
-
--- set_option trace.Meta.synthInstance true in
--- private instance [L.Structure B] [L'.Structure B] [ϕ.IsExpansionOn B] [(constantsOn A).Structure B]
---     : (@ℒ₁ _ _ ϕ A B).IsExpansionOn B :=
---   inferInstance
 
 -- variable (L') in
 abbrev ℒ₂ : L'[[B]] →ᴸ L'[[A]][[B]] :=
@@ -142,18 +137,18 @@ theorem Theory.model_iff_model_toSentence [L.Structure B] : B ⊨ (U : L.Theory)
 
 section Amalg₁
 
-variable [DecidableEq A] [Nonempty B]
 variable (ϕ) (Iϕ : ϕ.Injective)
-variable [L.Structure A] [L.Structure B] [L'.Structure B] [ϕ.IsExpansionOn B] (h : A ≅[L] B)
+variable [L.Structure A] [L.Structure B] [L'.Structure B]
+variable [Nonempty B] [ϕ.IsExpansionOn B] (h : A ≅[L] B)
 
 variable (A B) in
 abbrev joint_diagₑ : L'[[A]][[B]].Theory  :=
   (ℒ₁ ϕ).onTheory (L.elementaryDiagram A) ∪ ℒ₂.onTheory (L'.elementaryDiagram B)
 
-
-
-noncomputable opaque amalg₁ : (joint_diagₑ ϕ A B).ModelType := by
-  refine Classical.choice <| isSatisfiable_union_of_finite_unions fun S0 T0 hS hT =>
+open scoped Classical in
+include Iϕ h in
+theorem joint_diag_satisfiable_of_reduct_elementaryEquivalent : (joint_diagₑ ϕ A B).IsSatisfiable := by
+  refine isSatisfiable_union_of_finite_unions fun S0 T0 hS hT =>
     let U := (S0.finite_toSet.preimage (Set.injOn_of_injective <| onSentence_injective <| Iℒ₁ Iϕ))
     let φ := U.toFinset.toSentence
     letI : A ⊨ {exs_consts φ} := by
@@ -187,94 +182,126 @@ noncomputable opaque amalg₁ : (joint_diagₑ ϕ A B).ModelType := by
     · exact Set.preimage_mono hT
     · exact onSentence_injective Iℒ₂
 
-noncomputable instance : L'.Structure (amalg₁ ϕ Iϕ h) :=
-  (.comp .sumInl .sumInl : _ →ᴸ L'[[A]][[B]]).reduct _
+variable (A B) in
+structure Amalg where
+  carrier : Type
+  [str  : L.Structure carrier]
+  [str' : L'.Structure carrier]
+  [exp  : ϕ.IsExpansionOn carrier]
+  mapl : A ↪ₑ[L ] carrier
+  mapr : B ↪ₑ[L'] carrier
 
-noncomputable instance : L.Structure (amalg₁ ϕ Iϕ h) := ϕ.reduct _
+attribute [instance] Amalg.str Amalg.str' Amalg.exp
 
-noncomputable instance : (constantsOn A).Structure (amalg₁ ϕ Iϕ h) :=
-  (.comp .sumInl .sumInr : _ →ᴸ L'[[A]][[B]]).reduct _
+initialize_simps_projections Amalg (carrier → coe, -str, -str', -exp)
 
-noncomputable def amalg₁_mapl : A ↪ₑ[L] amalg₁ ϕ Iϕ h :=
-  letI exp := LHom.isExpansionOn_reduct ..
-  @ElementaryEmbedding.ofModelsElementaryDiagram _ _ _
-    (((amalg₁ ϕ Iϕ h).subtheoryModel Set.subset_union_left).reduct (ℒ₁ ϕ)) _ _ exp _
+instance : CoeSort (Amalg ϕ A B) (Type _) :=
+  ⟨Amalg.carrier⟩
 
-noncomputable def amalg₁_mapr : B ↪ₑ[L'] amalg₁ ϕ Iϕ h :=
-  letI exp := LHom.isExpansionOn_reduct ..
-  @ElementaryEmbedding.ofModelsElementaryDiagram _ _ _
-    (((amalg₁ ϕ Iϕ h).subtheoryModel Set.subset_union_right).reduct ℒ₂) _ _ exp _
+attribute [coe] Amalg.carrier
+
+include ϕ Iϕ h in
+theorem amalg_of_equivalence : Nonempty <| Amalg ϕ A B :=
+  Nonempty.elim (joint_diag_satisfiable_of_reduct_elementaryEquivalent ϕ Iϕ h) fun a =>
+    letI : L[[A]].Structure a := (@ℒ₁ L L' ϕ A B).reduct a
+    letI : L.Structure a := (L.lhomWithConstants A).reduct a
+    letI : L'[[B]].Structure a := (@ℒ₂ L' A B).reduct a
+    letI : L'.Structure a := (L'.lhomWithConstants B).reduct a
+    letI := ((L.lhomWithConstants A).isExpansionOn_reduct a).1
+    letI : ϕ.IsExpansionOn a := ⟨
+      fun {n} f xs =>
+      letI x1 := ((L.lhomWithConstants A).isExpansionOn_reduct a).1 f xs
+      letI x2 := ((@ℒ₁ L L' ϕ A B).isExpansionOn_reduct a).1 (((L.lhomWithConstants A).onFunction f)) xs
+      letI xx := x2.trans x1
+      letI y1 := ((L'.lhomWithConstants B).isExpansionOn_reduct a).1 (ϕ.onFunction f) xs
+      letI y2 := ((@ℒ₂ L' A B).isExpansionOn_reduct a).1 ((L'.lhomWithConstants B).onFunction (ϕ.onFunction f)) xs
+      letI yy := y2.trans y1
+      by
+        rw [← yy, ← xx]
+        simp [LHom.addConstants],
+      fun {n} r xs =>
+      letI x1 := ((L.lhomWithConstants A).isExpansionOn_reduct a).2 r xs
+      letI x2 := ((@ℒ₁ L L' ϕ A B).isExpansionOn_reduct a).2 (((L.lhomWithConstants A).onRelation r)) xs
+      letI xx := x2.trans x1
+      letI y1 := ((L'.lhomWithConstants B).isExpansionOn_reduct a).2 (ϕ.onRelation r) xs
+      letI y2 := ((@ℒ₂ L' A B).isExpansionOn_reduct a).2 ((L'.lhomWithConstants B).onRelation (ϕ.onRelation r)) xs
+      letI yy := y2.trans y1
+      by
+        rw [← yy, ← xx]
+        simp [LHom.addConstants]⟩
+    .intro {
+      carrier := a,
+      mapl := @ElementaryEmbedding.ofModelsElementaryDiagram _ _ _ _ _ _ _
+        ⟨fun _ => (((ℒ₁ ϕ).realize_onSentence ..).1 <| a.3.1 _ <| Set.mem_union_left _ <| Set.mem_image_of_mem _ ·)⟩
+      mapr := @ElementaryEmbedding.ofModelsElementaryDiagram _ _ _ _ _ _ _
+        ⟨fun _ => ((ℒ₂.realize_onSentence ..).1 <| a.3.1 _ <| Set.mem_union_right _ <| Set.mem_image_of_mem _ ·)⟩
+    }
 
 end Amalg₁
 
--- instance {M : (L.sum E).Struc} : L.Structure M := LHom.sumInl.reduct (L' := L.sum E) M
--- instance {M : (L.sum E).Struc} : E.Structure M := LHom.sumInr.reduct (L' := L.sum E) M
 
--- noncomputable def amalg_of_equivalence : Σ (C : (L.sum E).Struc), (A ↪ₑ[L] C) × (B ↪ₑ[L.sum E] C) :=
---   letI := (LHom.comp .sumInl .sumInl).reduct (L' := (L.sum E)[[A]][[B]])
---   ⟨.mk <| amalg₁ E h, amalg₁_mapl E h, amalg₁_mapr E h⟩
+section Amalg₂
 
-
--- noncomputable def amalg_of_equivalence' : Σ (C : Type) (LC : L.Structure C) (L'C : L'.Structure C) (), (A ↪ₑ[L] C) × (B ↪ₑ[L'] C) :=
---   letI := (LHom.comp .sumInl .sumInl).reduct (L' := (L.sum E)[[A]][[B]])
---   ⟨.mk <| amalg₁ E h, amalg₁_mapl E h, amalg₁_mapr E h⟩
+variable {C : Type} [Nonempty C]
+variable [L.Structure A] [L.Structure B] [L.Structure C] [L'.Structure C] [ϕ.IsExpansionOn C]
+variable (f : A ↪ₑ[L] B) (g : A ↪ₑ[L] C)
 
 
--- end Amalg₁
+@[implicit_reducible]
+def FirstOrder.Language.Embedding.withDom (_f : A ↪[L] B) : Type := B
+deriving L.Structure
 
--- section Amalg₂
+instance (f : A ↪[L] B) : (constantsOn A).Structure f.withDom :=
+  constantsOn.structure fun a => f a
 
--- variable {C : Type} [DecidableEq B] [Nonempty C]
--- variable [L.Structure A] [L.Structure B] [L.Structure C] [E.Structure C]
--- variable (f : A ↪ₑ[L] B) (g : A ↪ₑ[L] C)
+def FirstOrder.Language.Embedding.liftWithDom (f : A ↪[L] B) : A ↪[L[[A]]] f.withDom := by
+  refine ⟨f.toEmbedding, ?_, ?_⟩
+  · intro
+    | _, .inl _, _ => exact f.map_fun' ..
+    | 0, .inr _, _ => rfl
+  · intro
+    | _, .inl R, _ => exact f.map_rel' ..
 
--- @[implicit_reducible]
--- def FirstOrder.Language.Embedding.withDom (_f : A ↪[L] B) : Type := B
--- deriving L.Structure
+def FirstOrder.Language.ElementaryEmbedding.liftWithDom (f : A ↪ₑ[L] B) : A ↪ₑ[L[[A]]] f.toEmbedding.withDom := by
+  refine ⟨f, ?_⟩
+  intro n φ x
+  have h : (Sum.elim (fun a ↦ L.con a) (f ∘ x) : ↑A ⊕ Fin n → f.toEmbedding.withDom) = f ∘ Sum.elim (fun a ↦ ↑(L.con a)) x := (Sum.comp_elim _ _ _).symm
+  simpa only [Formula.Realize, ← BoundedFormula.realize_constantsVarsEquiv, h] using
+    f.map_formula ..
 
--- instance (f : A ↪[L] B) : (constantsOn A).Structure f.withDom :=
---   constantsOn.structure fun a => f a
+-- unif_hint where
+-- |- f.toEmbedding.withDom =?= B
 
--- def FirstOrder.Language.Embedding.liftWithDom (f : A ↪[L] B) : A ↪[L[[A]]] f.withDom := by
---   refine ⟨f.toEmbedding, ?_, ?_⟩
---   · intro
---     | _, .inl _, _ => exact f.map_fun' ..
---     | 0, .inr _, _ => rfl
---   · intro
---     | _, .inl R, _ => exact f.map_rel' ..
+def FirstOrder.Language.ElementaryEmbedding.reduct (ψ : L →ᴸ L')
+  [L.Structure M] [L'.Structure M] [ψ.IsExpansionOn M]
+  [L.Structure N] [L'.Structure N] [ψ.IsExpansionOn N]
+  (b : M ↪ₑ[L'] N)
+    : M ↪ₑ[L] N :=
+  ⟨b, fun _ _ _ => by calc
+    _ ↔ _ := (ψ.realize_onFormula _).symm
+    _ ↔ _ := b.2 _ _
+    _ ↔ _ := ψ.realize_onFormula _
+  ⟩
 
--- def prot (b : α ≃ β) : (constantsOn α) ≃ᴸ (constantsOn β) where
---   toLHom  := ⟨fun 0 c => b c, default⟩
---   invLHom := ⟨fun 0 c => b.symm c, default⟩
---   left_inv  := by ext ⟨⟩ <;> first | trivial | exact b.3 _
---   right_inv := by ext ⟨⟩ <;> first | trivial | exact b.4 _
-
--- -- #check prot (Equiv.Set.univ A)
-
--- def FirstOrder.Language.ElementaryEmbedding.liftWithDom (f : A ↪ₑ[L] B) : A ↪ₑ[L[[A]]] f.toEmbedding.withDom := by
---   refine ⟨f, ?_⟩
---   intro n φ x
---   have h : (Sum.elim (fun a ↦ L.con a) (f ∘ x) : ↑A ⊕ Fin n → f.toEmbedding.withDom) = f ∘ Sum.elim (fun a ↦ ↑(L.con a)) x := (Sum.comp_elim _ _ _).symm
---   simpa only [Formula.Realize, ← BoundedFormula.realize_constantsVarsEquiv, h] using
---     f.map_formula ..
-
--- -- noncomputable def amalg₂ :=
--- --   letI : L[[↑Set.univ]].Structure B := L.instStructureWithConstantsElemWithConstants _ f.toEmbedding
--- --   letI : L[[↑Set.univ]].Structure C := L.instStructureWithConstantsElemWithConstants _ g.toEmbedding
--- --   amalg₁ E <| ((f.liftWithConstants .univ).elementarilyEquivalent (N := B)).symm.trans <|
--- --     (g.liftWithConstants .univ).elementarilyEquivalent (N := C)
-
--- -- #check
--- --   letI : L[[↑Set.univ]].Structure B := L.instStructureWithConstantsElemWithConstants _ f.toEmbedding
--- --   letI : L[[↑Set.univ]].Structure C := L.instStructureWithConstantsElemWithConstants _ g.toEmbedding
--- --   @amalg₁_mapl L[[Set.univ (α := A)]] E B C _ _
--- --   (L.instStructureWithConstantsElemWithConstants _ f.toEmbedding)
--- --   (L.instStructureWithConstantsElemWithConstants _ g.toEmbedding) _
--- --   (((f.liftWithConstants .univ).elementarilyEquivalent (N := B)).symm.trans <|
--- --     (g.liftWithConstants .univ).elementarilyEquivalent (N := C))
-
--- -- theorem pop : ∃ (D : (L.sum E).Struc) (h : B ↪ₑ[L] D) (k : C ↪ₑ[L.sum E] D), ∀ (a : A), h (f a) = k (g a) :=
--- --   ⟨⟩
+theorem amalg_of_embeddings (Iϕ : ϕ.Injective) : ∃ (D : Amalg ϕ B C), ∀ (a : A), D.mapl (f a) = D.mapr (g a) := by
+  have ⟨D'⟩ := amalg_of_equivalence (ϕ.addConstants A) (ϕ.addConstants_injective Iϕ)
+    (f.liftWithDom.elementarilyEquivalent.symm.trans g.liftWithDom.elementarilyEquivalent)
+  letI := (L'.lhomWithConstants A).reduct D'
+  letI := ϕ.reduct D'
+  letI : (L.lhomWithConstants A).IsExpansionOn D' := ⟨
+    fun _ _ => by calc
+    _ = _ := (D'.exp.1 ..).symm
+    _ = _ := ((LHom.isExpansionOn_reduct ..).1 ..),
+    fun _ _ => by calc
+    _ = _ := ((D'.exp.2 ..).symm)
+    _ = _ := (LHom.isExpansionOn_reduct ..).2 ..
+  ⟩
+  exists ⟨D', (D'.mapl.reduct <| L.lhomWithConstants A), (D'.mapr.reduct <| L'.lhomWithConstants A)⟩
+  intro
+  calc
+  _ = _ := Embedding.map_constants D'.mapl.toEmbedding _
+  _ = _ := (D'.exp.1 (L.con _) default).symm
+  _ = _ := (Embedding.map_constants D'.mapr.toEmbedding _).symm
 
 -- theorem elementaryDiagram_mono {M} [L.Structure M] [L'.Structure M] [exp : ϕ.IsExpansionOn M]
 --     : (ϕ.addConstants M).onTheory (L.elementaryDiagram M) ⊆ L'.elementaryDiagram M :=
@@ -286,41 +313,7 @@ end Amalg₁
 -- -- unif_hint where
 -- -- |- f.toEmbedding.withDom =?= B
 
--- #check
---   let ⟨D, ff, gg⟩ := amalg_of_equivalence E <| (f.liftWithDom.elementarilyEquivalent).symm.trans g.liftWithDom.elementarilyEquivalent
---   D
--- -- #check amalg_of_equivalence E
--- -- (((f.liftWithConstants .univ).elementarilyEquivalent (N := B)).symm.trans <|
--- --     (g.liftWithConstants .univ).elementarilyEquivalent (N := C))
-
--- -- theorem amalg_of_embeddings
--- --     : ∃ (D : (L.sum E).Struc) (h : B ↪ₑ[L] D) (k : C ↪ₑ[L.sum E] D), ∀ (a : A), h (f a) = k (g a) :=
--- --   letI : (constantsOn Set.univ).Structure B := L.instStructureConstantsOnElemWithConstants _ f.toEmbedding
--- --   letI : (constantsOn Set.univ).Structure C := L.instStructureConstantsOnElemWithConstants _ g.toEmbedding
--- --   have ⟨D, BD, CD⟩ := amalg_of_equivalence E (((f.liftWithConstants .univ).elementarilyEquivalent (N := B)).symm.trans <|
--- --     (g.liftWithConstants .univ).elementarilyEquivalent (N := C))
--- --   ⟨
--- --     D.reduct <| .sumMap (lhomWithConstants _ _) (.id _),
--- --     ⟨BD.1, fun n φ xs => by
--- --       letI : L.Structure D := ((D.reduct <| .sumMap (lhomWithConstants _ _) (.id _)).reduct .sumInl).str
--- --       letI := (LHom.sumInl (L := L) (L' := constantsOn <| Set.univ (α := A))).isExpansionOn_reduct D
--- --       calc
--- --         _ ↔ _ := (@LHom.sumInl.realize_onFormula L _ _ _ _ _ ((LHom.sumInl (L' := constantsOn <| Set.univ)).isExpansionOn_reduct D) _).symm
--- --         _ ↔ _ := BD.2 (LHom.sumInl.onFormula φ) xs
--- --         _ ↔ _ := @LHom.sumInl.realize_onFormula L _ _ _ _ _ (LHom.sumInl_isExpansionOn _) _ _
--- --     ⟩,
--- --     ⟨CD.1, fun n φ xs => by
--- --       letI : L.Structure D := ((D.reduct <| .sumMap (lhomWithConstants _ _) (.id _)).reduct .sumInl).str
--- --       -- letI := (LHom.sumInl (L := L) (L' := constantsOn <| Set.univ (α := A))).isExpansionOn_reduct D
--- --       calc
--- --         _ ↔ _ := (@LHom.sumInl.realize_onFormula (L.sum E) _ _ _ _ _ ((LHom.sumInl (L' := constantsOn <| Set.univ)).isExpansionOn_reduct D) _).symm
--- --         _ ↔ _ := CD.2 _ xs
--- --         _ ↔ _ := @LHom.sumInl.realize_onFormula L _ _ _ _ _ (LHom.sumInl_isExpansionOn _) _ _
--- --     ⟩,
--- --     _
--- --   ⟩
-
--- end Amalg₂
+end Amalg₂
 
 -- variable {E₁ E₂ : Language} {T : L.Theory} {T₁ : (L.sum E₁).Theory} {T₂ : (L.sum E₂).Theory}
 -- variable {T_sub₁ : LHom.sumInl.onTheory T ⊆ T₁} {T_sub₂ : LHom.sumInl.onTheory T ⊆ T₂}

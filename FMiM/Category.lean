@@ -11,7 +11,7 @@ structure FirstOrder.Language.Struc where
   carrier : Type
   [str : L.Structure carrier]
 
-attribute [instance high] Struc.str
+attribute [instance] Struc.str
 
 initialize_simps_projections Struc (carrier → coe, -str)
 
