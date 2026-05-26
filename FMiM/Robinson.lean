@@ -2,6 +2,7 @@ import FMiM.Category
 import FMiM.ElementarySystems
 import Mathlib.ModelTheory.Satisfiability
 import Mathlib.ModelTheory.Bundled
+import Mathlib.Data.Sum.Order
 
 set_option linter.style.longLine false
 
@@ -98,32 +99,31 @@ lemma Iℒ₁ (Iϕ : ϕ.Injective) : (@ℒ₁ _ _ ϕ A B).Injective :=
 lemma Iℒ₂ : (@ℒ₂ L' A B).Injective :=
   LHom.addConstants_injective LHom.sumInl_injective
 
-theorem onTerm_injective (hf : ϕ.Injective) : ∀ ⦃t s : L.Term α⦄, ϕ.onTerm t = ϕ.onTerm s → t = s
-  | var _, var _, h => congrArg _ <| Term.var.inj h
-  | func f ts, func g ss, h => by
-    let h := Term.func.inj h
-    cases h.1
-    congr
-    · exact hf.1 h.2.1.eq
-    · ext i; exact onTerm_injective hf <| congrFun h.2.2.eq i
+theorem onTerm_injective (I : ϕ.Injective) : ∀ ⦃t s : L.Term α⦄, ϕ.onTerm t = ϕ.onTerm s → t = s
+| var _, var _, h => congrArg _ <| Term.var.inj h
+| func .., func .., h => by
+  obtain ⟨⟨⟩, hf, ht⟩ := Term.func.inj h
+  congr
+  · exact I.1 hf.eq
+  · ext i
+    exact onTerm_injective I <| congrFun ht.eq i
 
-theorem onBoundedFormula_injective (hf : ϕ.Injective) : ∀ ⦃φ ψ : L.BoundedFormula α k⦄,
-  ϕ.onBoundedFormula φ = ϕ.onBoundedFormula ψ → φ = ψ
-  | .falsum, .falsum, _ => rfl
-  | .equal _ _, .equal _ _, h => by
-      congr <;> apply onTerm_injective hf <;> simp only [BoundedFormula.equal.inj h]
-  | .rel _ _, .rel _ _, h => by
-      let h := BoundedFormula.rel.inj h
-      cases h.1
-      congr
-      · exact hf.2 h.2.1.eq
-      · ext i; exact onTerm_injective hf <| congrFun h.2.2.eq i
-  | .imp _ _, .imp _ _, h => by
-      congr <;> apply onBoundedFormula_injective hf <;> simp only [BoundedFormula.imp.inj h]
-  | ∀'_, ∀'_, h => by
-      congr
-      apply onBoundedFormula_injective hf
-      apply BoundedFormula.all.inj h
+theorem onBoundedFormula_injective (I : ϕ.Injective) : ∀ ⦃φ ψ : L.BoundedFormula α k⦄,
+    ϕ.onBoundedFormula φ = ϕ.onBoundedFormula ψ → φ = ψ
+| .falsum, .falsum, _ => rfl
+| .equal _ _, .equal _ _, h => by
+    congr <;> apply onTerm_injective I <;> simp only [BoundedFormula.equal.inj h]
+| .rel _ _, .rel _ _, h => by
+    obtain ⟨⟨⟩, hr, ht⟩ := BoundedFormula.rel.inj h
+    congr
+    · exact I.2 hr.eq
+    · ext i; exact onTerm_injective I <| congrFun ht.eq i
+| .imp _ _, .imp _ _, h => by
+    congr <;> apply onBoundedFormula_injective I <;> simp only [BoundedFormula.imp.inj h]
+| ∀'_, ∀'_, h => by
+    congr
+    apply onBoundedFormula_injective I
+    exact BoundedFormula.all.inj h
 
 theorem onSentence_injective : ϕ.Injective → ϕ.onSentence.Injective := onBoundedFormula_injective
 
@@ -188,12 +188,11 @@ structure Amalg where
   [str  : L.Structure carrier]
   [str' : L'.Structure carrier]
   [exp  : ϕ.IsExpansionOn carrier]
+  [nonempty : Nonempty carrier]
   mapl : A ↪ₑ[L ] carrier
   mapr : B ↪ₑ[L'] carrier
 
-attribute [instance] Amalg.str Amalg.str' Amalg.exp
-
-initialize_simps_projections Amalg (carrier → coe, -str, -str', -exp)
+attribute [instance] Amalg.str Amalg.str' Amalg.exp Amalg.nonempty
 
 instance : CoeSort (Amalg ϕ A B) (Type _) :=
   ⟨Amalg.carrier⟩
@@ -272,6 +271,7 @@ def FirstOrder.Language.ElementaryEmbedding.liftWithDom (f : A ↪ₑ[L] B) : A 
 -- unif_hint where
 -- |- f.toEmbedding.withDom =?= B
 
+@[reducible]
 def FirstOrder.Language.ElementaryEmbedding.reduct (ψ : L →ᴸ L')
   [L.Structure M] [L'.Structure M] [ψ.IsExpansionOn M]
   [L.Structure N] [L'.Structure N] [ψ.IsExpansionOn N]
@@ -282,6 +282,13 @@ def FirstOrder.Language.ElementaryEmbedding.reduct (ψ : L →ᴸ L')
     _ ↔ _ := b.2 _ _
     _ ↔ _ := ψ.realize_onFormula _
   ⟩
+
+variable {M N : Type} {ψ : L →ᴸ L'}
+  [L'.Structure M] [L'.Structure N] {b : M ↪ₑ[L'] N} [L.Structure M] [ψ.IsExpansionOn M]
+  [L.Structure N] [ψ.IsExpansionOn N] {x : M} in
+@[simp]
+theorem FirstOrder.Language.ElementaryEmbedding.reduct_apply :
+  (b.reduct ψ) x = b x := rfl
 
 theorem amalg_of_embeddings (Iϕ : ϕ.Injective) : ∃ (D : Amalg ϕ B C), ∀ (a : A), D.mapl (f a) = D.mapr (g a) := by
   have ⟨D'⟩ := amalg_of_equivalence (ϕ.addConstants A) (ϕ.addConstants_injective Iϕ)
@@ -315,9 +322,36 @@ theorem amalg_of_embeddings (Iϕ : ϕ.Injective) : ∃ (D : Amalg ϕ B C), ∀ (
 
 end Amalg₂
 
--- variable {E₁ E₂ : Language} {T : L.Theory} {T₁ : (L.sum E₁).Theory} {T₂ : (L.sum E₂).Theory}
--- variable {T_sub₁ : LHom.sumInl.onTheory T ⊆ T₁} {T_sub₂ : LHom.sumInl.onTheory T ⊆ T₂}
--- variable {T_complete : T.IsComplete}
+variable {L₁ L₂ : Language.{0, 0}} {ϕ₁ : L →ᴸ L₁} {ϕ₂ : L →ᴸ L₂} (I₁ : ϕ₁.Injective) (I₂ : ϕ₂.Injective)
+variable {T : L.Theory} {T₁ : L₁.Theory} {T₂ : L₂.Theory}
+variable (T_complete : T.IsComplete) (T_sub₁ : ϕ₁.onTheory T ⊆ T₁) (T_sub₂ : ϕ₂.onTheory T ⊆ T₂)
+variable (sat₁ : T₁.IsSatisfiable) (sat₂ : T₂.IsSatisfiable)
 
--- theorem Robinson (sat₁ : T₁.IsSatisfiable) (sat₂ : T₂.IsSatisfiable) : T.IsSatisfiable := by
---   sorry
+def FirstOrder.Language.Struc.reduct (ϕ : L →ᴸ L') (M : L'.Struc) : L.Struc :=
+  mk (str := ϕ.reduct M)
+
+unif_hint {T' : L'.Theory} {A : T'.ModelType} where
+|- (Struc.reduct ϕ ⟨A⟩ : Type) =?= A
+
+include T_complete T_sub₁ T_sub₂ in
+theorem reduct_elementarilyEquivalent_of_extend_completeTheory
+  [L.Structure A] [L₁.Structure A] [L.Structure B] [L₂.Structure B] [Nonempty A] [Nonempty B]
+  [ϕ₁.IsExpansionOn A] [ϕ₂.IsExpansionOn B] [hA : A ⊨ T₁] [hB : B ⊨ T₂] :
+    A ≅[L] B := by
+  have := (ϕ₁.onTheory_model _).1 <| hA.mono T_sub₁
+  have := (ϕ₂.onTheory_model _).1 <| hB.mono T_sub₂
+  calc
+    _ = _ := Eq.symm <| T_complete.eq_complete_theory _
+    _ = _ := T_complete.eq_complete_theory _
+
+open Lex
+
+abbrev J := (Unit ⊕ Unit) ⊕ₗ (ℕ+ ×ₗ Bool)
+
+
+instance [LE α] [Preorder β] [Nonempty β] [IsDirectedOrder β] : IsDirectedOrder (α ⊕ₗ β) where
+  directed
+  | .inl _, .inl _ => ⟨.inr Classical.ofNonempty, .sep .., .sep ..⟩
+  | .inl _, .inr b => ⟨.inr b, .sep .., .inr le_rfl⟩
+  | .inr b, .inl _ => ⟨.inr b, .inr le_rfl, .sep ..⟩
+  | .inr _, .inr _ => .imp' .inr (fun _ => .imp .inr .inr) <| exists_ge_ge ..

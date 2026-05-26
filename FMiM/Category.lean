@@ -10,10 +10,11 @@ variable {L : Language}
 structure FirstOrder.Language.Struc where
   carrier : Type
   [str : L.Structure carrier]
+  [nonempty : Nonempty carrier]
 
-attribute [instance] Struc.str
+attribute [instance] Struc.str Struc.nonempty
 
-initialize_simps_projections Struc (carrier → coe, -str)
+initialize_simps_projections Struc (carrier → coe, -str, -nonempty)
 
 def FirstOrder.Language.mkStruc := Struc.mk (L := L)
 
@@ -43,14 +44,17 @@ def iso_eq_equiv {M N : L.Struc} : Equiv (M ≅ N) (M ≃[L] N) where
     Equiv.symm_comp_self_toEmbedding f, Equiv.self_comp_symm_toEmbedding f⟩
 
 variable {J : Type} [Preorder J] [IsDirectedOrder J] [Nonempty J]
-variable (G : J → Type) [∀ i, L.Structure (G i)] (f : ∀ ⦃i j⦄, i ≤ j → G i ↪[L] G j)
-variable [DirectedSystem G fun _ _ => (f ·)]
+variable (G : J → Type) [∀ i, L.Structure (G i)] [∀ i, Nonempty (G i)]
+variable (f : ∀ ⦃i j⦄, i ≤ j → G i ↪[L] G j) [DirectedSystem G fun _ _ => (f ·)]
 
 def as_functor : J ⥤ L.Struc where
   obj i        := .mk <| G i
   map ij       := f <| ij.le
   map_id _     := Embedding.ext fun _ => FirstOrder.Language.DirectedSystem.map_self _ _
   map_comp _ _ := Embedding.ext fun _ => (FirstOrder.Language.DirectedSystem.map_map _ _ _ _).symm
+
+instance : Nonempty (L.DirectLimit G f) :=
+  ⟨.of L J G f Classical.ofNonempty Classical.ofNonempty⟩
 
 noncomputable def DirectLimit' : Limits.Cocone (as_functor G f) where
   pt := .mk <| L.DirectLimit G f
