@@ -8,6 +8,7 @@ section
 
 variable {L' L : Language} (ϕ : L →ᴸ L')
 
+/-- An L'-structure bundled with its *φ*-reduct. -/
 structure FirstOrder.Language.LHom.RedStruc extends L'.Struc where
   [red : L.Structure carrier]
   [exp : ϕ.IsExpansionOn carrier]
@@ -20,8 +21,11 @@ abbrev FirstOrder.Language.LHom.mkRS : L'.Struc → ϕ.RedStruc := (.mk (red := 
 
 end
 
+/- We follow section 4.2 in https://staff.fnwi.uva.nl/y.venema/teaching/mt/material/mt-bvdb-1819.pdf
+to prove the theorem, both in notation and proof strategy. -/
 noncomputable section Robinson
 
+/-- For ease of notation: define the languages of interest. -/
 class langs where
   L : Language
   E₁ : Language
@@ -39,21 +43,25 @@ abbrev ϕ₂ : L →ᴸ L₂ := .sumInl
 abbrev ψ₁ : L₁ →ᴸ L' := .sumMap (.id L) .sumInl
 abbrev ψ₂ : L₂ →ᴸ L' := .sumMap (.id L) .sumInr
 
+/-- Define the symmetrical *langs* instance, to avoid some code duplication later on. -/
 protected instance symm : langs := ⟨L, E₂, E₁⟩
 
 end langs
 
 open langs
 
+/-- A layer in the directed system we will construct to prove Robinson's Theorem. -/
 structure layer where
   A : ϕ₁.RedStruc
   B : ϕ₂.RedStruc
   f : A ↪ₑ[L] B
 
+/-- Specialize *amalg_of_equivalence* to the sum languages. -/
 theorem amalg_of_equivalence' {A : Type} [L.Structure A] {B : ϕ₂.RedStruc} (hAB : A ≅[L] B)
   : Nonempty <| Σ (B' : ϕ₂.RedStruc), (A ↪ₑ[L] B') × (B ↪ₑ[L₂] B') :=
   (amalg_of_equivalence .sumInl sumInl_injective hAB).elim fun C => ⟨⟨⟨C⟩⟩, C.mapl, C.mapr⟩
 
+/-- Specialize *amalg_of_embeddings* to a layer. -/
 theorem layer.amalg (AB : layer) : ∃ (A' : ϕ₁.RedStruc) (g : AB.B ↪ₑ[L] A') (k : AB.A ↪ₑ[L₁] A'),
     ∀ a, g (AB.f a) = k a :=
   (amalg_of_embeddings AB.f (.refl L AB.A) sumInl_injective).elim fun C comm =>
@@ -68,6 +76,7 @@ def layer.g (AB : layer) : AB.B ↪ₑ[L] AB.nextA :=
 def layer.k (AB : layer) : AB.A ↪ₑ[L₁] AB.nextA :=
   AB.amalg.choose_spec.choose_spec.choose
 
+/-- Prove that the upper triangles in the system commute. -/
 theorem layer.gf_k {AB : layer} : ∀ a, AB.g (AB.f a) = AB.k a :=
   AB.amalg.choose_spec.choose_spec.choose_spec
 
@@ -80,17 +89,16 @@ def layer.nextf (AB : layer) : AB.nextA ↪ₑ[L] AB.nextB :=
 def layer.h (AB : layer) : AB.B ↪ₑ[L₂] AB.nextB :=
   (@layer.amalg .symm <| @mk .symm AB.B AB.nextA AB.g).choose_spec.choose_spec.choose
 
+/-- Prove that the lower triangles in the system commute. -/
 theorem layer.fg_h {AB : layer} : ∀ b, AB.nextf (AB.g b) = AB.h b :=
   (@layer.amalg .symm <| @mk .symm AB.B AB.nextA AB.g).choose_spec.choose_spec.choose_spec
 
 abbrev layer.next (AB : layer) : layer := ⟨AB.nextA, AB.nextB, AB.nextf⟩
 
-@[simp]
 theorem layer.fk_hf {AB : layer} : ∀ a, AB.next.f (AB.k a) = AB.h (AB.f a) := by
   intro
   rw [← AB.gf_k, AB.fg_h]
 
-@[simp]
 theorem layer.gh_kg {AB : layer} : ∀ b, AB.next.g (AB.h b) = AB.next.k (AB.g b) := by
   intro
   rw [← AB.fg_h, AB.next.gf_k]
@@ -118,7 +126,8 @@ end problem
 
 open problem
 
-theorem reduct_elementarilyEquivalent_of_extend_completeTheory'
+/-- If *A ⊧ T₁* and *B ⊧ T₂* their reducts are *L*-equivalent. -/
+theorem reduct_elementarilyEquivalent_of_extend_completeTheory
   {A : ϕ₁.RedStruc} {B : ϕ₂.RedStruc} [hA : A ⊨ T₁] [hB : B ⊨ T₂] :
     A ≅[L] B := by
   have := (onTheory_model _ _).1 <| hA.mono T_sub₁
@@ -127,13 +136,15 @@ theorem reduct_elementarilyEquivalent_of_extend_completeTheory'
     _ = _ := Eq.symm <| T_cpl.eq_complete_theory _
     _ = _ := T_cpl.eq_complete_theory _
 
+/-- Define the initial layer of the directed system. -/
 def layer.base : layer :=
   letI A  := ϕ₁.mkRS ⟨sat₁.some⟩
   letI B' := ϕ₂.mkRS ⟨sat₂.some⟩
   letI Bfh := Nonempty.some <|
-    amalg_of_equivalence' (reduct_elementarilyEquivalent_of_extend_completeTheory' : A ≅[L] B')
+    amalg_of_equivalence' (reduct_elementarilyEquivalent_of_extend_completeTheory : A ≅[L] B')
   ⟨A, Bfh.1, Bfh.2.1⟩
 
+/-- Define the directed system by iterating *layer.next*. -/
 def layers := Stream'.iterate layer.next layer.base
 
 @[implicit_reducible]
@@ -142,8 +153,7 @@ def A (n : ℕ) : ϕ₁.RedStruc := (layers.get n).A
 @[implicit_reducible]
 def B (n : ℕ) : ϕ₂.RedStruc := (layers.get n).B
 
--- unif_hint {n : ℕ} where
-
+/-- Indexing of the directed system. -/
 @[reducible]
 def G : ℕ ×ₗ Bool → Type
 | (n,⊥) => A n
@@ -157,17 +167,23 @@ instance : ∀ i, Nonempty (G i)
 | (_,⊥)    => inferInstanceAs <| Nonempty (A _)
 | (_,⊤)    => inferInstanceAs <| Nonempty (B _)
 
+/-- Object part of the final functor that we use to equip the direct limit with an L₁ structure. -/
 def iA : ℕ → ℕ ×ₗ Bool := (·, ⊥)
 
+/-- Object part of the final functor that we use to equip the direct limit with an L₂ structure. -/
 def iB : ℕ → ℕ ×ₗ Bool := (·, ⊤)
 
+@[simp]
 theorem G_iA (n : ℕ) : G (iA n) = A n := rfl
 
+@[simp]
 theorem G_iB (n : ℕ) : G (iB n) = B n := rfl
 
+/-- The directed system consisting only of the k-maps. -/
 def k_sys : (n m : ℕ) → n ≤ m → A n ↪ₑ[L₁] A m :=
   natLERecₑ (layer.k <| layers.get ·)
 
+/-- The directed system consisting only of the h-maps. -/
 def h_sys : (n m : ℕ) → n ≤ m → B n ↪ₑ[L₂] B m :=
   natLERecₑ (layer.h <| layers.get ·)
 
@@ -177,7 +193,6 @@ instance : DirectedSystem _ (k_sys · · ·) :=
 instance : DirectedSystem _ (h_sys · · ·) :=
   inferInstanceAs (DirectedSystem _ (natLERecₑ _ · · ·))
 
--- set_option trace.Meta.isDefEq true in
 @[simp]
 theorem k_sys_succ {n m : ℕ} (nm : n ≤ m)
   : ∀ a, k_sys _ _ nm.step a = (layers.get m).k (k_sys _ _ nm a) := by
@@ -212,6 +227,7 @@ theorem gh_kg_sys {n m : ℕ} {nm : n ≤ m} {nm' : n + 1 ≤ m + 1}
     rw [h_sys_succ nl, k_sys_succ <| Nat.succ_le_succ nl, ← ih]
     apply layer.gh_kg
 
+/-- The directed system. -/
 noncomputable def F (i j : ℕ ×ₗ Bool) (ij : i ≤ j) : G i ↪ₑ[L] G j := match i,j with
 | (n,⊥), (m,⊥) => (k_sys n m ij.monotone_fst).reduct ϕ₁
 | (n,⊤), (m,⊤) => (h_sys n m ij.monotone_fst).reduct ϕ₂
@@ -227,7 +243,6 @@ instance : DirectedSystem G (F · · ·) where
   map_self
   | (n,⊥) => (map_self k_sys ·)
   | (m,⊤) => (map_self h_sys ·)
-
   map_map := by
     have : ¬ ⊤ ≤ ⊥ := not_le.mpr Bool.false_lt_true
     rintro ⟨l, ⟨⟩⟩ ⟨m, ⟨⟩⟩ ⟨n, ⟨⟩⟩ ⟨_, _, nm⟩ ⟨_, _, ml⟩ x
@@ -237,7 +252,7 @@ instance : DirectedSystem G (F · · ·) where
     ; first
     | apply map_map k_sys
     | apply map_map h_sys
-    | repeat (rw [comp_apply]; try rw [reduct_apply])
+    | repeat rw [comp_apply]
     · sorry
     · sorry
     · sorry
@@ -252,3 +267,9 @@ instance : DirectedSystem G (F · · ·) where
     · sorry
     · sorry
     · sorry
+
+/- Unfortunately, I have run out of time and have not finished the proof.
+To finish the prove of directedness here, it's clear the lemmas about f,g,h,k commuting suffice.
+Then, we need to do some work to equip the direct limit of this diagram with L₁ and L₂ structures
+by showing it's L-isomorphic to the colimits of k_sys and h_sys. Then, that structure will form the
+proof of satisfiability for *T'*. -/

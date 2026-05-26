@@ -350,19 +350,3 @@ variable (sat₁ : T₁.IsSatisfiable) (sat₂ : T₂.IsSatisfiable)
 
 def FirstOrder.Language.Struc.reduct (ϕ : L →ᴸ L') (M : L'.Struc) : L.Struc :=
   mk (str := ϕ.reduct M)
-
--- unif_hint {T' : L'.Theory} {A : T'.ModelType} where
--- |- (Struc.reduct ϕ ⟨A⟩ : Type) =?= A
-
-include T_complete T_sub₁ T_sub₂ in
-/-- If *A ⊧ T₁* and *B ⊧ T₂* and *T₁,T₂* both extend a complete *L*-theory *T*,
-their reducts are *L*-equivalent. -/
-theorem reduct_elementarilyEquivalent_of_extend_completeTheory
-  [L.Structure A] [L₁.Structure A] [L.Structure B] [L₂.Structure B] [Nonempty A] [Nonempty B]
-  [ϕ₁.IsExpansionOn A] [ϕ₂.IsExpansionOn B] [hA : A ⊨ T₁] [hB : B ⊨ T₂] :
-    A ≅[L] B := by
-  have := (ϕ₁.onTheory_model _).1 <| hA.mono T_sub₁
-  have := (ϕ₂.onTheory_model _).1 <| hB.mono T_sub₂
-  calc
-    _ = _ := Eq.symm <| T_complete.eq_complete_theory _
-    _ = _ := T_complete.eq_complete_theory _
