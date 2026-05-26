@@ -4,6 +4,7 @@ import Mathlib.ModelTheory.Satisfiability
 
 open FirstOrder Language CategoryTheory
 
+-- TODO: Generalize to universes
 variable {L : Language.{0, 0}}
 
 section FreshConstants
