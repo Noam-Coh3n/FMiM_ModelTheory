@@ -6,14 +6,15 @@ open FirstOrder CategoryTheory Language
 
 variable {L : Language}
 
--- The category of first order structures with embeddings
+/-- The category of first order structures with L-embeddings -/
 structure FirstOrder.Language.Struc where
   carrier : Type
   [str : L.Structure carrier]
+  [nonempty : Nonempty carrier]
 
-attribute [instance] Struc.str
+attribute [instance] Struc.str Struc.nonempty
 
-initialize_simps_projections Struc (carrier → coe, -str)
+initialize_simps_projections Struc (carrier → coe, -str, -nonempty)
 
 def FirstOrder.Language.mkStruc := Struc.mk (L := L)
 
@@ -31,25 +32,32 @@ instance : ConcreteCategory L.Struc (L.Embedding · ·) where
   hom := id
   ofHom := id
 
+/-- An isomorphism in L.Struc is the same as an L-equivalence. -/
 def iso_eq_equiv {M N : L.Struc} : Equiv (M ≅ N) (M ≃[L] N) where
   toFun := fun ⟨f, g, fg, gf⟩ => ⟨⟨f, g, Embedding.ext_iff.1 fg, Embedding.ext_iff.1 gf⟩, f.2, f.3⟩
   invFun := fun f => ⟨f.toEmbedding, f.symm.toEmbedding,
     Equiv.symm_comp_self_toEmbedding f, Equiv.self_comp_symm_toEmbedding f⟩
 
 variable {J : Type} [Preorder J] [IsDirectedOrder J] [Nonempty J]
-variable (G : J → Type) [∀ i, L.Structure (G i)] (f : ∀ ⦃i j⦄, i ≤ j → G i ↪[L] G j)
-variable [DirectedSystem G fun _ _ => (f ·)]
+variable (G : J → Type) [∀ i, L.Structure (G i)] [∀ i, Nonempty (G i)]
+variable (f : ∀ ⦃i j⦄, i ≤ j → G i ↪[L] G j) [DirectedSystem G fun _ _ => (f ·)]
 
+/-- View a directed system as a functor. -/
 def as_functor : J ⥤ L.Struc where
   obj i        := .mk <| G i
   map ij       := f <| ij.le
   map_id _     := Embedding.ext fun _ => FirstOrder.Language.DirectedSystem.map_self _ _
   map_comp _ _ := Embedding.ext fun _ => (FirstOrder.Language.DirectedSystem.map_map _ _ _ _).symm
 
+instance : Nonempty (L.DirectLimit G f) :=
+  ⟨.of L J G f Classical.ofNonempty Classical.ofNonempty⟩
+
+/-- View *L.DirectLimit G f* as a cocone over *as_functor G f*.  -/
 noncomputable def DirectLimit' : Limits.Cocone (as_functor G f) where
   pt := .mk <| L.DirectLimit G f
   ι := ⟨DirectLimit.of L J G f, fun _ _ _ => Embedding.ext fun _ => DirectLimit.of_f⟩
 
+/-- The cocone *L.DirectLimit' G f* is colimiting.  -/
 noncomputable def DirectLimit.isColimit : Limits.IsColimit (DirectLimit' G f) where
   desc c := FirstOrder.Language.DirectLimit.lift _ _ _ _ c.ι.app <| comm c
   uniq t m h := by
@@ -61,6 +69,7 @@ where comm c := fun _ _ ij => Embedding.ext_iff.1 (c.ι.naturality (homOfLE ij))
 
 variable (F : J ⥤ L.Struc)
 
+/-- View a functor as a directed system.  -/
 instance : DirectedSystem (fun i => F.obj i) (fun _ _ ij => F.map ij.hom) where
   map_self := by simp
   map_map k j i ij jk := Embedding.ext_iff.mp (F.4 ij.hom jk.hom).symm
